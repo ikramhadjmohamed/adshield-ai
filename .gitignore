@@ -1,0 +1,6 @@
+git init
+echo "venv/
+node_modules/
+.env
+__pycache__/
+*.pyc" > .gitignore
