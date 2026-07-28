@@ -34,3 +34,4 @@ class TrustReport(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     agent_results: list[AgentResult]
     summary: str
+    execution: ExecutionMetadata
