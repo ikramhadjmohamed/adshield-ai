@@ -13,9 +13,9 @@ Millions of ads are submitted to platforms every day. Humans cannot manually ins
 
 ## What it does
 
-AdShield AI answers one question: **"Should this advertisement be manually reviewed before publication?"**
+AdShield AI assists advertising platform moderators by prioritizing potentially fraudulent advertisements before publication. It answers one question: **"Should this advertisement be manually reviewed before publication?"**
 
-An advertiser (or in this MVP, a moderator testing a submission) provides a brand name, headline, description, landing URL, and optionally an image. The system runs four specialized AI reviewers in parallel analysis, each inspecting one dimension of the ad, then a final Decision Agent reasons over their combined evidence to produce a trust report — not just a score, but a clear explanation of *why*.
+An advertiser (or in this MVP, a moderator testing a submission) provides a brand name, headline, description, landing URL, and optionally an image. The system runs four specialized reviewers, each inspecting one dimension of the advertisement, before a final Decision Agent reasons over their combined evidence to produce a trust report — not just a score, but a clear explanation of *why*.
 
 ```
 Advertisement
@@ -40,15 +40,23 @@ Advertisement
 
 ---
 
-## The five agents
+## Why a multi-agent architecture?
 
-| Agent | Type | What it checks |
+Rather than relying on a single model to make a moderation decision, AdShield AI decomposes the problem into specialized reviewers. Each agent focuses on one aspect of an advertisement (URL, text, image, or brand consistency), producing explainable evidence instead of a single opaque prediction.
+
+A final Decision Agent synthesizes these independent findings into an evidence-based recommendation, making the system easier to understand, debug, and extend with new reviewers over time.
+
+---
+
+## Pipeline components
+
+| Component | Type | What it checks |
 |---|---|---|
 | **URL Agent** | Rule-based (no LLM) | Typosquatting, suspicious TLDs, missing HTTPS, scam keywords in the domain |
 | **Text Agent** | LLM (Groq / Llama 3.3) | Urgency tactics, unrealistic promises, phishing language, manipulative wording, misleading claims |
-| **Image Agent** | OCR (EasyOCR) + LLM | Extracts visible text from the ad image, then runs the same 5-category analysis as the Text Agent — catches scam text hidden in banners rather than in structured fields |
+| **Image Agent** | OCR (EasyOCR) + LLM | Uses EasyOCR to extract visible text from an advertisement image, then applies the same language-based fraud analysis as the Text Agent. *The MVP does not perform visual deepfake or logo analysis.* |
 | **Brand Agent** | LLM | Checks whether the ad's tone/claims are consistent with the stated brand's known public identity (returns a neutral result for unrecognized/fictional brands rather than guessing) |
-| **Decision Agent** | LLM | Reasons over all four reports' *evidence* (not a weighted average) to produce the final risk score, recommendation, and explanation |
+| **Decision Agent** | LLM | **Reasons over evidence rather than averaging scores** to produce the final risk score, recommendation, and explanation |
 
 Every agent shares a common `AgentResult` contract (risk score, issues, confidence, reasoning, execution metadata) and a common resilience strategy: retry once on malformed output, fall back to a safe "Manual Review" signal rather than crashing the pipeline if an LLM call fails.
 
@@ -108,6 +116,12 @@ adshield-ai/
 ---
 
 ## Running the project
+
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- A Groq API key ([console.groq.com](https://console.groq.com))
 
 ### Backend
 
@@ -182,9 +196,9 @@ python test_decision_agent.py
 
 Given more time, natural next steps for this project:
 
-- 🎥 Deepfake video/audio detection
-- 🔐 Digital signatures / content credentials for brand-verified ads (provenance angle)
-- 📚 Brand knowledge base with official guidelines, to make the Brand Agent reliable beyond well-known brands
-- 🔄 Moderator feedback loop — storing human decisions to eventually replace hand-picked heuristic weights with learned ones
-- ⚡ Parallel agent execution for lower latency
-- 🌐 Browser extension for consumers to check any ad they encounter
+- Deepfake video/audio detection
+- Digital signatures / content credentials for brand-verified ads (provenance angle)
+- Brand knowledge base with official guidelines, to make the Brand Agent reliable beyond well-known brands
+- Moderator feedback loop — storing human decisions to eventually replace hand-picked heuristic weights with learned ones
+- Parallel agent execution for lower latency
+- Browser extension for consumers to check any ad they encounter
