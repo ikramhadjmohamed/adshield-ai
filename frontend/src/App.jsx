@@ -31,8 +31,12 @@ export default function App() {
     }
   }
 
-  return (
-    <div className="min-h-screen bg-[#14161C]">
+ return (
+    <div
+      className={`min-h-screen bg-[#14161C] flex flex-col ${
+        report ? "justify-start pt-10" : "justify-center"
+      }`}
+    >
       <AdReviewForm onSubmit={handleSubmit} isLoading={isLoading} />
 
       {error && (
