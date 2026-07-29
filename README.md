@@ -1,1 +1,190 @@
-# adshield-ai
+# AdShield AI
+
+An AI-powered ad moderation platform that automatically reviews advertisements before they go live, detects signs of scams, impersonation, and manipulation, and generates an explainable trust report for human moderators.
+
+> **Challenge:** Ad Trust & Authenticity — Detection & Verification angle
+> **User:** Advertising platform moderators (Google Ads / TikTok Ads / Meta Ads style)
+
+---
+
+## The problem
+
+Millions of ads are submitted to platforms every day. Humans cannot manually inspect all of them, and generative AI makes scam ads cheaper and more convincing to produce. Platforms need a way to **prioritize** which ads deserve a closer look before they reach real users.
+
+## What it does
+
+AdShield AI answers one question: **"Should this advertisement be manually reviewed before publication?"**
+
+An advertiser (or in this MVP, a moderator testing a submission) provides a brand name, headline, description, landing URL, and optionally an image. The system runs four specialized AI reviewers in parallel analysis, each inspecting one dimension of the ad, then a final Decision Agent reasons over their combined evidence to produce a trust report — not just a score, but a clear explanation of *why*.
+
+```
+Advertisement
+      │
+      ▼
+┌─────────────┬─────────────┬─────────────┬─────────────┐
+│  URL Agent  │ Text Agent  │ Image Agent │ Brand Agent │
+│ (rule-based)│   (LLM)     │ (OCR + LLM) │   (LLM)     │
+└─────────────┴─────────────┴─────────────┴─────────────┘
+      │             │              │             │
+      └─────────────┴──────┬───────┴─────────────┘
+                            ▼
+                     Decision Agent (LLM)
+                            │
+                            ▼
+                      Trust Report
+              (risk score, recommendation,
+               evidence-based explanation)
+```
+
+**Important design choice:** the system never claims "our AI decides." It says "our AI assists human moderators by prioritizing risky advertisements and explaining why." The final recommendation is always one of `Approve`, `Reject`, or `Manual Review` — a human stays in the loop.
+
+---
+
+## The five agents
+
+| Agent | Type | What it checks |
+|---|---|---|
+| **URL Agent** | Rule-based (no LLM) | Typosquatting, suspicious TLDs, missing HTTPS, scam keywords in the domain |
+| **Text Agent** | LLM (Groq / Llama 3.3) | Urgency tactics, unrealistic promises, phishing language, manipulative wording, misleading claims |
+| **Image Agent** | OCR (EasyOCR) + LLM | Extracts visible text from the ad image, then runs the same 5-category analysis as the Text Agent — catches scam text hidden in banners rather than in structured fields |
+| **Brand Agent** | LLM | Checks whether the ad's tone/claims are consistent with the stated brand's known public identity (returns a neutral result for unrecognized/fictional brands rather than guessing) |
+| **Decision Agent** | LLM | Reasons over all four reports' *evidence* (not a weighted average) to produce the final risk score, recommendation, and explanation |
+
+Every agent shares a common `AgentResult` contract (risk score, issues, confidence, reasoning, execution metadata) and a common resilience strategy: retry once on malformed output, fall back to a safe "Manual Review" signal rather than crashing the pipeline if an LLM call fails.
+
+---
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Backend | FastAPI (Python) |
+| Data validation | Pydantic v2 |
+| LLM | Groq API — `llama-3.3-70b-versatile` |
+| OCR | EasyOCR |
+| Frontend | React (Vite) |
+| Styling | Tailwind CSS |
+| HTTP client | Axios |
+
+---
+
+## Project structure
+
+```
+adshield-ai/
+├── backend/
+│   ├── agents/
+│   │   ├── url_agent.py
+│   │   ├── text_agent.py
+│   │   ├── image_agent.py
+│   │   ├── brand_agent.py
+│   │   └── decision_agent.py
+│   ├── api/
+│   │   └── routes.py
+│   ├── models/
+│   │   └── schemas.py
+│   ├── scripts/
+│   │   ├── test_url_agent.py
+│   │   ├── test_text_agent.py
+│   │   ├── test_image_agent.py
+│   │   ├── test_brand_agent.py
+│   │   ├── test_decision_agent.py
+│   │   └── test_images/
+│   ├── main.py
+│   └── requirements.txt
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── AdReviewForm.jsx
+│   │   │   └── AdShieldDashboard.jsx
+│   │   ├── App.jsx
+│   │   └── index.css
+│   └── .env.example
+│
+└── README.md
+```
+
+---
+
+## Running the project
+
+### Backend
+
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # macOS/Linux
+
+pip install -r requirements.txt
+```
+
+Create a `.env` file in `backend/`:
+```
+GROQ_API_KEY=your_groq_api_key_here
+```
+
+Run the server:
+```bash
+uvicorn main:app --reload
+```
+API available at `http://127.0.0.1:8000` (interactive docs at `/docs`).
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+```
+
+Create a `.env` file in `frontend/` (see `.env.example`):
+```
+VITE_API_URL=http://127.0.0.1:8000
+```
+
+Run the dev server:
+```bash
+npm run dev
+```
+App available at `http://localhost:5173`.
+
+Both servers must be running simultaneously for the app to work end to end.
+
+---
+
+## Testing
+
+Each agent has an isolated test script under `backend/scripts/`, following an incremental build-test-freeze workflow: every agent was validated on its own (including edge cases and false-positive checks) before being wired into the full pipeline.
+
+```bash
+cd backend/scripts
+python test_url_agent.py
+python test_text_agent.py
+python test_image_agent.py
+python test_brand_agent.py
+python test_decision_agent.py
+```
+
+---
+
+## Design decisions worth noting
+
+- **Evidence over averaging** — the Decision Agent does not compute a weighted average of the four agent scores. A single strong signal (e.g. explicit phishing language) can justify rejection even if the other three agents report low risk, matching how a human moderator would actually reason.
+- **Heuristic weights are labeled as such** — the URL Agent's rule-based scoring uses expert-defined baseline weights, explicitly documented as a starting point that would be calibrated on labeled data in a production system, not presented as scientifically precise.
+- **Honest uncertainty** — the Brand Agent returns a neutral, low-confidence result for brands it doesn't recognize rather than guessing. No agent invents facts it isn't confident about.
+- **Resilience by design** — every LLM-based agent retries once on malformed output, then falls back to a safe "flag for manual review" result instead of crashing the pipeline.
+- **Sequential by choice, not by necessity** — the four specialized agents are fully independent of each other's outputs, so the current sequential execution could be parallelized (e.g. with `asyncio.gather`) as a straightforward future optimization without any architectural changes.
+
+---
+
+## Roadmap
+
+Given more time, natural next steps for this project:
+
+- 🎥 Deepfake video/audio detection
+- 🔐 Digital signatures / content credentials for brand-verified ads (provenance angle)
+- 📚 Brand knowledge base with official guidelines, to make the Brand Agent reliable beyond well-known brands
+- 🔄 Moderator feedback loop — storing human decisions to eventually replace hand-picked heuristic weights with learned ones
+- ⚡ Parallel agent execution for lower latency
+- 🌐 Browser extension for consumers to check any ad they encounter
