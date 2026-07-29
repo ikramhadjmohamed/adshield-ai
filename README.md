@@ -18,9 +18,9 @@ AdShield AI assists advertising platform moderators by prioritizing potentially 
 An advertiser (or in this MVP, a moderator testing a submission) provides a brand name, headline, description, landing URL, and optionally an image. The system runs four specialized reviewers, each inspecting one dimension of the advertisement, before a final Decision Agent reasons over their combined evidence to produce a trust report — not just a score, but a clear explanation of *why*.
 
 ```
-Advertisement
-      │
-      ▼
+                       Advertisement  
+                            │
+                            ▼
 ┌─────────────┬─────────────┬─────────────┬─────────────┐
 │  URL Agent  │ Text Agent  │ Image Agent │ Brand Agent │
 │ (rule-based)│   (LLM)     │ (OCR + LLM) │   (LLM)     │
@@ -37,6 +37,26 @@ Advertisement
 ```
 
 **Important design choice:** the system never claims "our AI decides." It says "our AI assists human moderators by prioritizing risky advertisements and explaining why." The final recommendation is always one of `Approve`, `Reject`, or `Manual Review` — a human stays in the loop.
+
+---
+ 
+## Demo
+
+### Ad Submission Form
+
+![Ad Submission Form](demo/approved/Screenshot%202026-07-29%20210120.png)
+
+### Trust Report — Approved
+
+![Approved Trust Report](demo/approved/Screenshot%202026-07-29%20210150.png)
+
+### Trust Report — Rejected
+
+![Rejected Trust Report](demo/rejected/Screenshot%202026-07-29%20205115.png)
+
+### Investigation Details
+
+![Rejected Ad Evidence](demo/rejected/Screenshot%202026-07-29%20205135.png)
 
 ---
 
